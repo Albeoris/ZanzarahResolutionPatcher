@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/ZanzarahResolutionPatcher/ZanzarahResolutionPatcher.csproj" />
+  <Project Path="tests/ZanzarahResolutionPatcher.Tests/ZanzarahResolutionPatcher.Tests.csproj" />
+</Solution>

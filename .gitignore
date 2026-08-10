@@ -39,6 +39,10 @@ ScaffoldingReadMe.txt
 # dotenv environment variables file
 .env
 
+# Idea
+.idea/
+*.user
+
 # Others
 ~$*
 *~

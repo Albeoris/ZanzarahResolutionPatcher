@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and release win-x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve release version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.Substring(1)
+          if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
+            throw "Release tags must use semantic versioning, for example v1.2.0. Received: $tag"
+          }
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ASSET_NAME=ZanzarahResolutionPatcher-$tag-win-x64.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore
+        run: dotnet restore ZanzarahResolutionPatcher.slnx
+
+      - name: Test
+        run: dotnet test ZanzarahResolutionPatcher.slnx --configuration Release --no-restore
+
+      - name: Publish self-contained executable
+        shell: pwsh
+        run: |
+          dotnet publish src/ZanzarahResolutionPatcher/ZanzarahResolutionPatcher.csproj `
+            --configuration Release `
+            -p:PublishProfile=win-x64 `
+            -p:Version=$env:RELEASE_VERSION `
+            --output artifacts/publish
+
+      - name: Validate and prepare release executable
+        shell: pwsh
+        run: |
+          $publishedFiles = @(Get-ChildItem "artifacts/publish" -File -Recurse)
+          if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].Extension -ne ".exe") {
+            $publishedNames = $publishedFiles.FullName -join ", "
+            throw "Expected exactly one published .exe, found $($publishedFiles.Count): $publishedNames"
+          }
+
+          $assetPath = Join-Path "artifacts" $env:ASSET_NAME
+          Copy-Item -LiteralPath $publishedFiles[0].FullName -Destination $assetPath
+          $checksum = (Get-FileHash -Algorithm SHA256 $assetPath).Hash.ToLowerInvariant()
+          "$checksum  $env:ASSET_NAME" | Set-Content "$assetPath.sha256" -Encoding ascii
+          "ASSET_PATH=$assetPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            "$env:ASSET_PATH" `
+            "$env:ASSET_PATH.sha256" `
+            --verify-tag `
+            --generate-notes `
+            --title "Zanzarah Resolution Patcher ${{ github.ref_name }}"
