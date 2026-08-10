@@ -116,6 +116,7 @@ This reproduces the established recommendations:
 The general angular conversion was also verified: a 4:3 horizontal FOV of 45 degrees becomes approximately 57.822402 degrees at 16:9 and 52.859924 degrees at 16:10. Converting from 16:9 to 16:10 produces the same result as converting directly from 4:3. Zanzarah's `fov x,y` command uses the pair above rather than IEEE-754 degree bytes, so no FOV hex edit is required.
 
 After patching any non-4:3 target, the application prints the required commands in red. Apply them after every game launch; otherwise the rendered world is horizontally distorted.
+Interactive runs wait for ENTER after this warning so it cannot disappear when the console window closes.
 
 For the Steam version:
 

@@ -122,8 +122,9 @@ public sealed class PatchApplication(
             console.MarkupLine($"Backup: [white]{Markup.Escape(backupPath!)}[/]");
         }
 
-        WriteFieldOfViewWarning(options);
+        var fieldOfViewWarningWasShown = WriteFieldOfViewWarning(options);
         WriteSteamWarning(options);
+        WaitAfterFieldOfViewWarning(options, fieldOfViewWarningWasShown);
 
         return 0;
     }
@@ -493,7 +494,7 @@ public sealed class PatchApplication(
         }
     }
 
-    private void WriteFieldOfViewWarning(PatchOptions options)
+    private bool WriteFieldOfViewWarning(PatchOptions options)
     {
         var widescreenTargets = options.Replacements
             .Select(static replacement => replacement.NewResolution)
@@ -503,7 +504,7 @@ public sealed class PatchApplication(
             .ToArray();
         if (widescreenTargets.Length == 0)
         {
-            return;
+            return false;
         }
 
         console.WriteLine();
@@ -524,6 +525,22 @@ public sealed class PatchApplication(
         console.MarkupLine(
             "[red]Edit [white]ZanZarah.bat[/] to use [white]start zanzarah.exe -console[/], " +
             "start the game, select the patched resolution, press [white]F11[/], and enter the command.[/]");
+
+        return true;
+    }
+
+    private void WaitAfterFieldOfViewWarning(
+        PatchOptions options,
+        bool fieldOfViewWarningWasShown)
+    {
+        if (options.NonInteractive || !fieldOfViewWarningWasShown)
+        {
+            return;
+        }
+
+        console.Prompt(
+            new TextPrompt<string>("[grey]Press ENTER to exit...[/]")
+                .AllowEmpty());
     }
 
     private string FormatTargetResolution(Resolution resolution) =>

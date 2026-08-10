@@ -11,6 +11,8 @@ public interface IFileDialogService
 
 public sealed class FileDialogService : IFileDialogService
 {
+    private readonly ConsoleWindowDialogHost dialogHost = new();
+
     public string? SelectInputFile()
     {
         using var dialog = new OpenFileDialog
@@ -23,7 +25,7 @@ public sealed class FileDialogService : IFileDialogService
             RestoreDirectory = true,
         };
 
-        return dialog.ShowDialog() == DialogResult.OK ? dialog.FileName : null;
+        return dialogHost.Show(dialog) == DialogResult.OK ? dialog.FileName : null;
     }
 
     public string? SelectOutputFile(string inputPath)
@@ -40,6 +42,6 @@ public sealed class FileDialogService : IFileDialogService
             RestoreDirectory = true,
         };
 
-        return dialog.ShowDialog() == DialogResult.OK ? dialog.FileName : null;
+        return dialogHost.Show(dialog) == DialogResult.OK ? dialog.FileName : null;
     }
 }

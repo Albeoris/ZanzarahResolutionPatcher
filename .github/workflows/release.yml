@@ -63,16 +63,14 @@ jobs:
           Copy-Item -LiteralPath $publishedFiles[0].FullName -Destination $assetPath
           $checksum = (Get-FileHash -Algorithm SHA256 $assetPath).Hash.ToLowerInvariant()
           "$checksum  $env:ASSET_NAME" | Set-Content "$assetPath.sha256" -Encoding ascii
-          "ASSET_PATH=$assetPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Create GitHub Release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ github.ref_name }}" `
-            "$env:ASSET_PATH" `
-            "$env:ASSET_PATH.sha256" `
-            --verify-tag `
-            --generate-notes `
-            --title "Zanzarah Resolution Patcher ${{ github.ref_name }}"
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Zanzarah Resolution Patcher ${{ github.ref_name }}
+          files: |
+            artifacts/${{ env.ASSET_NAME }}
+            artifacts/${{ env.ASSET_NAME }}.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          draft: false
