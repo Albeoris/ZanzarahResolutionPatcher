@@ -16,6 +16,8 @@ No .NET installation or command line is required.
 > [!NOTE]
 > The Steam version has a [known task-switching issue](https://steamcommunity.com/app/384570/discussions/1/521643320368729405/): Alt+Tab may crash or reload the game, especially in windowed mode. This is unrelated to the resolution patch. If this has been fixed by the time you read this, ignore the warning.
 
+<img width="731" height="276" alt="image" src="https://github.com/user-attachments/assets/b3cf8d97-f488-459b-aa3d-b4e53bff54bb" />
+
 ## Interactive mode
 
 The output path defaults to the input path when `--input` is supplied. If the input is selected through the Windows open-file dialog, a standard save-file dialog is also shown unless `--output` was supplied. Closing either dialog without selecting a file prints `Operation cancelled by the user.` and exits successfully without an error pause.
