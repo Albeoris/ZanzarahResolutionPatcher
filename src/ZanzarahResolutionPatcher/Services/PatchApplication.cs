@@ -509,22 +509,21 @@ public sealed class PatchApplication(
 
         console.WriteLine();
         console.Write(new FigletText("FOV REQUIRED").Color(Spectre.Console.Color.Red));
-        console.MarkupLine(
-            "[bold red]Zanzarah does not preserve the corrected field of view. " +
-            "Without it, non-4:3 gameplay is visibly distorted.[/]");
-        console.MarkupLine(
-            "[red]Enable the game console, then enter the matching command after every game launch:[/]");
+        console.WriteLine(
+            "Zanzarah does not preserve the corrected field of view. " +
+            "Without it, non-4:3 gameplay is visibly distorted.");
+        console.WriteLine(
+            "Enable the game console, then enter the matching command after every game launch:");
 
         foreach (var resolution in widescreenTargets)
         {
-            console.MarkupLine(
-                $"  [bold red]{Markup.Escape(resolution.ToString())}: " +
-                $"{Markup.Escape(fieldOfViewCalculator.Calculate(resolution).ToString())}[/]");
+            console.WriteLine(
+                $"  {resolution}: {fieldOfViewCalculator.Calculate(resolution)}");
         }
 
-        console.MarkupLine(
-            "[red]Edit [white]ZanZarah.bat[/] to use [white]start zanzarah.exe -console[/], " +
-            "start the game, select the patched resolution, press [white]F11[/], and enter the command.[/]");
+        console.WriteLine(
+            "Edit ZanZarah.bat to use start zanzarah.exe -console, start the game, " +
+            "select the patched resolution, press F11, and enter the command.");
 
         return true;
     }
@@ -561,14 +560,14 @@ public sealed class PatchApplication(
 
         console.WriteLine();
         console.Write(new FigletText("STEAM WARNING").Color(Spectre.Console.Color.Red));
-        console.MarkupLine(
-            "[bold red]The Steam version has a known issue: Alt+Tab or other task switching may " +
-            "crash or reload the game, especially in windowed mode.[/]");
-        console.MarkupLine(
-            "[red]This is a game issue and is not caused by the resolution patch. " +
+        console.WriteLine(
+            "The Steam version has a known issue: Alt+Tab or other task switching may " +
+            "crash or reload the game, especially in windowed mode.");
+        console.WriteLine(
+            "This is a game issue and is not caused by the resolution patch. " +
             "Avoid Alt+Tab while playing. If you are reading this in the future and the issue is fixed, " +
-            "ignore this warning.[/]");
-        console.MarkupLine($"[red]Details: {Markup.Escape(issueUrl)}[/]");
+            "ignore this warning.");
+        console.WriteLine($"Details: {issueUrl}");
     }
 
     private ushort PromptDimension(string prompt)
