@@ -41,4 +41,31 @@ public sealed class PatchOptions
             replacements.Add(replacement);
         }
     }
+
+    public Resolution[] ResolveFinalResolutions(IReadOnlyList<Resolution> gameResolutions)
+    {
+        ArgumentNullException.ThrowIfNull(gameResolutions);
+
+        var replacementsByResolution = replacements.ToDictionary(
+            static replacement => replacement.OldResolution,
+            static replacement => replacement.NewResolution);
+        var finalResolutions = gameResolutions
+            .Select(resolution => replacementsByResolution.GetValueOrDefault(resolution, resolution))
+            .ToArray();
+        var duplicates = finalResolutions
+            .GroupBy(static resolution => resolution)
+            .Where(static group => group.Count() > 1)
+            .Select(static group => group.Key)
+            .Order()
+            .ToArray();
+
+        if (duplicates.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The patch would create duplicate game resolution(s): {string.Join(", ", duplicates)}. " +
+                "Every game resolution must remain unique.");
+        }
+
+        return finalResolutions;
+    }
 }

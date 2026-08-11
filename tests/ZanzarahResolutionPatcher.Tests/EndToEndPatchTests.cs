@@ -57,18 +57,53 @@ public sealed class EndToEndPatchTests
         }
     }
 
+    [Fact]
+    public void Main_WhenPatchWouldCreateDuplicateResolution_RejectsWithoutChangingFile()
+    {
+        var temporaryDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
+            var originalBytes = CreateSyntheticExecutable();
+            File.WriteAllBytes(inputPath, originalBytes);
+
+            var exitCode = Program.Main(
+            [
+                "--input", inputPath,
+                "--old-resolution", "800x600",
+                "--new-resolution", "640x480",
+                "--unchecked",
+                "--non-interactive",
+            ]);
+
+            Assert.Equal(1, exitCode);
+            Assert.Equal(originalBytes, File.ReadAllBytes(inputPath));
+            Assert.False(File.Exists(inputPath + "_resolution.bak"));
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
     private static byte[] CreateSyntheticExecutable()
     {
-        var bytes = Enumerable.Repeat((byte)0xCC, 128).ToArray();
+        var bytes = Enumerable.Repeat((byte)0xCC, 256).ToArray();
         bytes[0] = 0x4D;
         bytes[1] = 0x5A;
 
-        WritePattern(bytes, 16, new Resolution(640, 480));
-        WritePattern(bytes, 32, new Resolution(800, 600));
-        WritePattern(bytes, 48, new Resolution(1024, 768));
-        WritePattern(bytes, 64, new Resolution(640, 480));
-        WritePattern(bytes, 80, new Resolution(800, 600));
-        WritePattern(bytes, 96, new Resolution(1024, 768));
+        int[] groupOffsets = [8, 44, 96, 132, 176, 212];
+        foreach (var groupOffset in groupOffsets)
+        {
+            WritePattern(bytes, groupOffset, new Resolution(640, 480));
+            WritePattern(bytes, groupOffset + 12, new Resolution(800, 600));
+            WritePattern(bytes, groupOffset + 24, new Resolution(1024, 768));
+        }
+
         return bytes;
     }
 

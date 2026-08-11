@@ -33,12 +33,7 @@ public sealed class ResolutionPatcher(PatchMetadataCodec metadataCodec)
             }
         }
 
-        var replacements = plan.Options.Replacements.ToDictionary(
-            static replacement => replacement.OldResolution,
-            static replacement => replacement.NewResolution);
-        var updatedResolutions = plan.GameResolutions
-            .Select(resolution => replacements.GetValueOrDefault(resolution, resolution))
-            .ToArray();
+        var updatedResolutions = plan.Options.ResolveFinalResolutions(plan.GameResolutions);
 
         return metadataCodec.Append(executable, updatedResolutions);
     }

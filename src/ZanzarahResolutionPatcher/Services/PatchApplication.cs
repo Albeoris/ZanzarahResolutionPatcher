@@ -58,8 +58,7 @@ public sealed class PatchApplication(
         var offsets = patternScanner.FindAll(
             sourceBytes.AsSpan(0, executableLength),
             gameResolutions);
-
-        EnsureExpectedPatternsWereFound(gameResolutions, offsets);
+        var patchableResolutions = GetPatchableResolutions(gameResolutions, offsets);
 
         var (backupPath, willCreateBackup, backupStatus) = ResolveBackup(options, metadata);
 
@@ -70,7 +69,7 @@ public sealed class PatchApplication(
 
         if (useMultipleReplacementWorkflow)
         {
-            if (!ResolveInteractiveReplacements(options, gameResolutions, backupStatus))
+            if (!ResolveInteractiveReplacements(options, patchableResolutions, backupStatus))
             {
                 console.MarkupLine("[yellow]Operation cancelled by the user.[/]");
                 return 1;
@@ -78,7 +77,7 @@ public sealed class PatchApplication(
         }
         else
         {
-            ResolveOldResolution(options, gameResolutions, backupStatus);
+            ResolveOldResolution(options, patchableResolutions, backupStatus);
             ResolveNewResolution(options, backupStatus);
 
             if (options.NewResolution == options.OldResolution)
@@ -88,6 +87,8 @@ public sealed class PatchApplication(
 
             options.SetReplacement(options.OldResolution!.Value, options.NewResolution!.Value);
         }
+
+        EnsureFinalResolutionsAreUnique(options, gameResolutions);
 
         var plan = new PatchPlan(
             options,
@@ -247,19 +248,39 @@ public sealed class PatchApplication(
         }
     }
 
-    private static void EnsureExpectedPatternsWereFound(
+    private static Resolution[] GetPatchableResolutions(
         IReadOnlyList<Resolution> gameResolutions,
         IReadOnlyDictionary<Resolution, IReadOnlyList<int>> offsets)
     {
-        var missing = gameResolutions
+        var patchable = gameResolutions
             .Distinct()
-            .Where(resolution => !offsets.TryGetValue(resolution, out var matches) || matches.Count == 0)
+            .Where(resolution =>
+                offsets.TryGetValue(resolution, out var matches) &&
+                matches.Count == ResolutionPatternScanner.ExpectedMatchCount)
+            .Order()
             .ToArray();
 
-        if (missing.Length > 0)
+        if (patchable.Length == 0)
         {
             throw new UserInputException(
-                $"No byte patterns were found for the expected game resolution(s): {FormatResolutions(missing)}.");
+                $"No safe set of {ResolutionPatternScanner.ExpectedMatchCount} matching byte patterns " +
+                "with a shared offset layout was found.");
+        }
+
+        return patchable;
+    }
+
+    private static void EnsureFinalResolutionsAreUnique(
+        PatchOptions options,
+        IReadOnlyList<Resolution> gameResolutions)
+    {
+        try
+        {
+            _ = options.ResolveFinalResolutions(gameResolutions);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new UserInputException(exception.Message);
         }
     }
 

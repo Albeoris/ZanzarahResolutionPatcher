@@ -50,4 +50,20 @@ public sealed class PatchMetadataCodecTests
 
         Assert.Contains("version 2", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Append_WithDuplicateResolutions_Throws()
+    {
+        Resolution[] duplicateResolutions =
+        [
+            new(640, 480),
+            new(640, 480),
+            new(1024, 768),
+        ];
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => codec.Append([0x4D, 0x5A], duplicateResolutions));
+
+        Assert.Contains("unique", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

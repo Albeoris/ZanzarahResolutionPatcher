@@ -86,10 +86,15 @@ public sealed class FieldOfViewPresentationTests
 
     private static byte[] CreateSyntheticExecutable()
     {
-        var bytes = Enumerable.Repeat((byte)0xCC, 64).ToArray();
-        WritePattern(bytes, 8, new Resolution(640, 480));
-        WritePattern(bytes, 24, new Resolution(800, 600));
-        WritePattern(bytes, 40, new Resolution(1024, 768));
+        var bytes = Enumerable.Repeat((byte)0xCC, 256).ToArray();
+        int[] groupOffsets = [8, 44, 96, 132, 176, 212];
+        foreach (var groupOffset in groupOffsets)
+        {
+            WritePattern(bytes, groupOffset, new Resolution(640, 480));
+            WritePattern(bytes, groupOffset + 12, new Resolution(800, 600));
+            WritePattern(bytes, groupOffset + 24, new Resolution(1024, 768));
+        }
+
         return bytes;
     }
 

@@ -85,7 +85,9 @@ uint16 zero
 uint16 height
 ```
 
-The executable body is scanned once for every requested game resolution. Matches are non-overlapping. Every occurrence of the selected old resolution is replaced.
+The executable body is scanned once for all known game resolutions. A resolution is patchable only when the scanner can reduce its matches to exactly six offsets whose relative layout is shared by at least one other game resolution. Unrelated matches are discarded; missing, ambiguous, or differently arranged matches are not offered for patching. Only those six validated occurrences are replaced.
+
+A patch plan is rejected if its final metadata would contain the same resolution more than once. Swapping two resolutions in one multi-replacement operation remains valid because the resulting set is still unique.
 
 After a successful patch, a footer is appended:
 

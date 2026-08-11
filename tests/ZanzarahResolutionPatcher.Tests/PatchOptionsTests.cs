@@ -29,4 +29,36 @@ public sealed class PatchOptionsTests
 
         Assert.Contains("must be different", exception.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ResolveFinalResolutions_WhenReplacementCreatesDuplicate_RejectsPlan()
+    {
+        var resolution640 = new Resolution(640, 480);
+        var resolution800 = new Resolution(800, 600);
+        var resolution1024 = new Resolution(1024, 768);
+        var options = new PatchOptions();
+        options.SetReplacement(resolution800, resolution640);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => options.ResolveFinalResolutions([resolution640, resolution800, resolution1024]));
+
+        Assert.Contains("duplicate", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("640x480", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ResolveFinalResolutions_WhenResolutionsAreSwapped_AllowsUniquePlan()
+    {
+        var resolution640 = new Resolution(640, 480);
+        var resolution800 = new Resolution(800, 600);
+        var resolution1024 = new Resolution(1024, 768);
+        var options = new PatchOptions();
+        options.SetReplacement(resolution640, resolution800);
+        options.SetReplacement(resolution800, resolution640);
+
+        var result = options.ResolveFinalResolutions(
+            [resolution640, resolution800, resolution1024]);
+
+        Assert.Equal([resolution800, resolution640, resolution1024], result);
+    }
 }

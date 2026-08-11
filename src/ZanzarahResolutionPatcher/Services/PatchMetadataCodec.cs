@@ -68,6 +68,11 @@ public sealed class PatchMetadataCodec
             offset += Resolution.BinarySize;
         }
 
+        if (resolutions.Distinct().Count() != resolutions.Count)
+        {
+            throw new InvalidDataException("The patch metadata contains duplicate resolution records.");
+        }
+
         return new PatchMetadata(resolutions, version);
     }
 
@@ -79,6 +84,12 @@ public sealed class PatchMetadataCodec
         {
             throw new ArgumentException(
                 $"Exactly {ExpectedResolutionCount} resolutions are required.", nameof(resolutions));
+        }
+
+        if (resolutions.Distinct().Count() != resolutions.Count)
+        {
+            throw new ArgumentException(
+                "Resolution metadata records must be unique.", nameof(resolutions));
         }
 
         var result = new byte[checked(executableBytes.Length +
