@@ -342,45 +342,6 @@ public sealed class FieldOfViewPatcherTests
     }
 
     [Fact]
-    public void Run_InteractiveSupportedSelection_ExcludesResolutionUsedByAnotherSlot()
-    {
-        var temporaryDirectory = Path.Combine(
-            Path.GetTempPath(),
-            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
-        Directory.CreateDirectory(temporaryDirectory);
-
-        try
-        {
-            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
-            var outputPath = Path.Combine(temporaryDirectory, "patched.exe");
-            File.WriteAllBytes(inputPath, TestPeFactory.Create());
-            var (application, _) = CreateInteractiveApplication(
-                new QueueConsoleInput('\r', 'y', '\r', 'n', '\r', '\r'),
-                new FixedSupportedResolutionProvider(
-                    new Resolution(800, 600),
-                    new Resolution(1280, 720)));
-            var options = new PatchOptions
-            {
-                InputPath = inputPath,
-                OutputPath = outputPath,
-                OldResolution = new Resolution(640, 480),
-                NoBackup = true,
-            };
-
-            var exitCode = application.Run(options);
-            var metadata = new PatchMetadataCodec().Read(File.ReadAllBytes(outputPath), out _);
-
-            Assert.Equal(0, exitCode);
-            Assert.Contains(new Resolution(1280, 720), metadata!.Resolutions);
-            Assert.Equal(metadata.Resolutions.Count, metadata.Resolutions.Distinct().Count());
-        }
-        finally
-        {
-            Directory.Delete(temporaryDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
     public void Run_InteractiveUncheckedInput_WhenResolutionIsAlreadyUsed_RepromptsImmediately()
     {
         var temporaryDirectory = Path.Combine(
@@ -596,12 +557,6 @@ public sealed class FieldOfViewPatcherTests
     private sealed class EmptySupportedResolutionProvider : ISupportedResolutionProvider
     {
         public IReadOnlyList<Resolution> GetSupportedResolutions() => [];
-    }
-
-    private sealed class FixedSupportedResolutionProvider(params Resolution[] resolutions)
-        : ISupportedResolutionProvider
-    {
-        public IReadOnlyList<Resolution> GetSupportedResolutions() => resolutions;
     }
 
     private sealed class TestConsole(IAnsiConsole inner, IAnsiConsoleInput input) : IAnsiConsole

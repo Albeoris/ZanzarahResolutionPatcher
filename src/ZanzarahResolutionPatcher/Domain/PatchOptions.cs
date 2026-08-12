@@ -95,4 +95,21 @@ public sealed class PatchOptions
             .Order()
             .ToArray();
     }
+
+    public Resolution[] GetAvailableTargetResolutions(
+        IReadOnlyList<Resolution> gameResolutions,
+        Resolution oldResolution,
+        IEnumerable<Resolution> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        var unavailableTargets = GetUnavailableTargetResolutions(gameResolutions, oldResolution);
+
+        return candidates
+            .Where(resolution =>
+                resolution != oldResolution &&
+                !unavailableTargets.Contains(resolution))
+            .Distinct()
+            .ToArray();
+    }
 }

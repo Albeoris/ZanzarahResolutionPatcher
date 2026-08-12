@@ -80,4 +80,21 @@ public sealed class PatchOptionsTests
         Assert.DoesNotContain(resolution800, result);
         Assert.DoesNotContain(resolution1024, result);
     }
+
+    [Fact]
+    public void GetAvailableTargetResolutions_ExcludesCurrentAndOccupiedResolutions()
+    {
+        var resolution640 = new Resolution(640, 480);
+        var resolution800 = new Resolution(800, 600);
+        var resolution1024 = new Resolution(1024, 768);
+        var resolution720p = new Resolution(1280, 720);
+        var options = new PatchOptions();
+
+        var result = options.GetAvailableTargetResolutions(
+            [resolution640, resolution800, resolution1024],
+            resolution640,
+            [resolution640, resolution800, resolution720p, resolution720p]);
+
+        Assert.Equal([resolution720p], result);
+    }
 }

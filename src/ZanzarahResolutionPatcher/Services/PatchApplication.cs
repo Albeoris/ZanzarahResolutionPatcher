@@ -382,9 +382,10 @@ public sealed class PatchApplication(
         }
 
         statusPresenter.Show(options, backupStatus);
-        var choices = supported
-            .Where(resolution => resolution != oldResolution && !unavailableTargets.Contains(resolution))
-            .ToArray();
+        var choices = options.GetAvailableTargetResolutions(
+            gameResolutions,
+            oldResolution,
+            supported);
         if (choices.Length == 0)
         {
             throw new UserInputException(
@@ -469,11 +470,10 @@ public sealed class PatchApplication(
 
         if (!options.IsUnchecked)
         {
-            var choices = supported!
-                .Where(resolution =>
-                    resolution != oldResolution &&
-                    !unavailableTargets.Contains(resolution))
-                .ToArray();
+            var choices = options.GetAvailableTargetResolutions(
+                gameResolutions,
+                oldResolution,
+                supported!);
             if (choices.Length == 0)
             {
                 throw new UserInputException(
