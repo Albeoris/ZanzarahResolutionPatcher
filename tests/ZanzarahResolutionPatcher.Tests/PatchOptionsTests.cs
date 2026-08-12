@@ -61,4 +61,23 @@ public sealed class PatchOptionsTests
 
         Assert.Equal([resolution800, resolution640, resolution1024], result);
     }
+
+    [Fact]
+    public void GetUnavailableTargetResolutions_ExcludesCurrentSlotAndIncludesOtherFinalTargets()
+    {
+        var resolution640 = new Resolution(640, 480);
+        var resolution800 = new Resolution(800, 600);
+        var resolution1024 = new Resolution(1024, 768);
+        var resolution720p = new Resolution(1280, 720);
+        var options = new PatchOptions();
+        options.SetReplacement(resolution800, resolution720p);
+
+        var result = options.GetUnavailableTargetResolutions(
+            [resolution640, resolution800, resolution1024],
+            resolution1024);
+
+        Assert.Equal([resolution640, resolution720p], result);
+        Assert.DoesNotContain(resolution800, result);
+        Assert.DoesNotContain(resolution1024, result);
+    }
 }

@@ -74,7 +74,11 @@ public sealed class PatchApplication(
 
         if (useMultipleReplacementWorkflow)
         {
-            if (!ResolveInteractiveReplacements(options, patchableResolutions, backupStatus))
+            if (!ResolveInteractiveReplacements(
+                    options,
+                    patchableResolutions,
+                    gameResolutions,
+                    backupStatus))
             {
                 console.MarkupLine("[yellow]Operation cancelled by the user.[/]");
                 return 1;
@@ -83,7 +87,7 @@ public sealed class PatchApplication(
         else
         {
             ResolveOldResolution(options, patchableResolutions, backupStatus);
-            ResolveNewResolution(options, backupStatus);
+            ResolveNewResolution(options, gameResolutions, backupStatus);
 
             if (options.NewResolution == options.OldResolution)
             {
@@ -338,16 +342,25 @@ public sealed class PatchApplication(
                 .AddChoices(available));
     }
 
-    private void ResolveNewResolution(PatchOptions options, string backupStatus)
+    private void ResolveNewResolution(
+        PatchOptions options,
+        IReadOnlyList<Resolution> gameResolutions,
+        string backupStatus)
     {
+        var oldResolution = options.OldResolution
+            ?? throw new InvalidOperationException("The old resolution has not been resolved.");
+        var unavailableTargets = options.GetUnavailableTargetResolutions(gameResolutions, oldResolution);
+
         if (options.IsUnchecked)
         {
             if (options.NewResolution is null)
             {
                 statusPresenter.Show(options, backupStatus);
-                var width = PromptDimension("Enter the [deepskyblue1]new width[/]:");
-                var height = PromptDimension("Enter the [deepskyblue1]new height[/]:");
-                options.NewResolution = new Resolution(width, height);
+                options.NewResolution = PromptUncheckedResolution(
+                    "Enter the [deepskyblue1]new width[/]:",
+                    "Enter the [deepskyblue1]new height[/]:",
+                    oldResolution,
+                    unavailableTargets);
             }
 
             return;
@@ -369,20 +382,31 @@ public sealed class PatchApplication(
         }
 
         statusPresenter.Show(options, backupStatus);
+        var choices = supported
+            .Where(resolution => resolution != oldResolution && !unavailableTargets.Contains(resolution))
+            .ToArray();
+        if (choices.Length == 0)
+        {
+            throw new UserInputException(
+                $"Windows did not report an unused alternative resolution for {oldResolution}. " +
+                "Use --unchecked to enter one manually.");
+        }
+
         options.NewResolution = console.Prompt(
                 new SelectionPrompt<Resolution>()
                     .Title("Select the [deepskyblue1]new resolution[/]:")
-                    .PageSize(Math.Min(15, Math.Max(3, supported.Length)))
+                    .PageSize(Math.Min(15, Math.Max(3, choices.Length)))
                     .UseConverter(FormatTargetResolution)
-                    .AddChoices(supported));
+                    .AddChoices(choices));
     }
 
     private bool ResolveInteractiveReplacements(
         PatchOptions options,
+        IReadOnlyList<Resolution> patchableResolutions,
         IReadOnlyList<Resolution> gameResolutions,
         string backupStatus)
     {
-        var available = gameResolutions.Distinct().Order().ToArray();
+        var available = patchableResolutions.Distinct().Order().ToArray();
         var supported = options.IsUnchecked ? null : GetSupportedResolutions();
         string? menuMessage = null;
 
@@ -422,6 +446,7 @@ public sealed class PatchApplication(
                         options,
                         oldResolution,
                         supported,
+                        gameResolutions,
                         backupStatus);
                     options.SetReplacement(oldResolution, newResolution);
                     break;
@@ -436,19 +461,23 @@ public sealed class PatchApplication(
         PatchOptions options,
         Resolution oldResolution,
         Resolution[]? supported,
+        IReadOnlyList<Resolution> gameResolutions,
         string backupStatus)
     {
         statusPresenter.Show(options, backupStatus);
+        var unavailableTargets = options.GetUnavailableTargetResolutions(gameResolutions, oldResolution);
 
         if (!options.IsUnchecked)
         {
             var choices = supported!
-                .Where(resolution => resolution != oldResolution)
+                .Where(resolution =>
+                    resolution != oldResolution &&
+                    !unavailableTargets.Contains(resolution))
                 .ToArray();
             if (choices.Length == 0)
             {
                 throw new UserInputException(
-                    $"Windows did not report an alternative resolution for {oldResolution}. " +
+                    $"Windows did not report an unused alternative resolution for {oldResolution}. " +
                     "Use --unchecked to enter one manually.");
             }
 
@@ -460,19 +489,11 @@ public sealed class PatchApplication(
                     .AddChoices(choices));
         }
 
-        while (true)
-        {
-            var width = PromptDimension($"Enter the [deepskyblue1]new width for {oldResolution}[/]:");
-            var height = PromptDimension($"Enter the [deepskyblue1]new height for {oldResolution}[/]:");
-            var resolution = new Resolution(width, height);
-
-            if (resolution != oldResolution)
-            {
-                return resolution;
-            }
-
-            console.MarkupLine("[yellow]The replacement resolution must be different.[/]");
-        }
+        return PromptUncheckedResolution(
+            $"Enter the [deepskyblue1]new width for {oldResolution}[/]:",
+            $"Enter the [deepskyblue1]new height for {oldResolution}[/]:",
+            oldResolution,
+            unavailableTargets);
     }
 
     private Resolution[] GetSupportedResolutions()
@@ -700,6 +721,40 @@ public sealed class PatchApplication(
             "ignore this warning.");
         console.WriteLine($"Details: {issueUrl}");
         return true;
+    }
+
+    private Resolution PromptUncheckedResolution(
+        string widthPrompt,
+        string heightPrompt,
+        Resolution oldResolution,
+        IReadOnlyCollection<Resolution> unavailableTargets)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(widthPrompt);
+        ArgumentException.ThrowIfNullOrWhiteSpace(heightPrompt);
+        ArgumentNullException.ThrowIfNull(unavailableTargets);
+
+        while (true)
+        {
+            var width = PromptDimension(widthPrompt);
+            var height = PromptDimension(heightPrompt);
+            var resolution = new Resolution(width, height);
+
+            if (resolution == oldResolution)
+            {
+                console.MarkupLine("[yellow]The replacement resolution must be different.[/]");
+                continue;
+            }
+
+            if (unavailableTargets.Contains(resolution))
+            {
+                console.MarkupLine(
+                    $"[yellow]Resolution {Markup.Escape(resolution.ToString())} is already used " +
+                    "by another game resolution. Choose a unique resolution.[/]");
+                continue;
+            }
+
+            return resolution;
+        }
     }
 
     private ushort PromptDimension(string prompt)

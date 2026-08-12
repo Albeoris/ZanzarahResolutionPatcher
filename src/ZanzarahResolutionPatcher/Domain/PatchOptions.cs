@@ -70,4 +70,29 @@ public sealed class PatchOptions
 
         return finalResolutions;
     }
+
+    public Resolution[] GetUnavailableTargetResolutions(
+        IReadOnlyList<Resolution> gameResolutions,
+        Resolution oldResolution)
+    {
+        ArgumentNullException.ThrowIfNull(gameResolutions);
+
+        if (!gameResolutions.Contains(oldResolution))
+        {
+            throw new ArgumentException(
+                $"Resolution {oldResolution} is not present in the game resolution list.",
+                nameof(oldResolution));
+        }
+
+        var replacementsByResolution = replacements.ToDictionary(
+            static replacement => replacement.OldResolution,
+            static replacement => replacement.NewResolution);
+
+        return gameResolutions
+            .Where(resolution => resolution != oldResolution)
+            .Select(resolution => replacementsByResolution.GetValueOrDefault(resolution, resolution))
+            .Distinct()
+            .Order()
+            .ToArray();
+    }
 }

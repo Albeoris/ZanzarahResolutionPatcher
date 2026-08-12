@@ -72,6 +72,8 @@ The combined and separate forms cannot be mixed for the same resolution. For exa
 
 Windows display modes are enumerated through `EnumDisplaySettings`. Unless `--unchecked` is used, the new resolution must be in that list. With `--unchecked`, a missing new resolution is entered manually as a width and height.
 
+Every final game resolution must be unique. Interactive selection lists omit resolutions already used by another slot. Manual `--unchecked` input rejects a duplicate immediately and asks for another value; the final patch validation retains the same invariant for command-line and programmatic use.
+
 The original executable is expected to contain the following three resolutions:
 
 - `640x480`

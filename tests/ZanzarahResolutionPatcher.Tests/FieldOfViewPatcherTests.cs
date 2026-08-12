@@ -341,6 +341,91 @@ public sealed class FieldOfViewPatcherTests
         }
     }
 
+    [Fact]
+    public void Run_InteractiveSupportedSelection_ExcludesResolutionUsedByAnotherSlot()
+    {
+        var temporaryDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
+            var outputPath = Path.Combine(temporaryDirectory, "patched.exe");
+            File.WriteAllBytes(inputPath, TestPeFactory.Create());
+            var (application, _) = CreateInteractiveApplication(
+                new QueueConsoleInput('\r', 'y', '\r', 'n', '\r', '\r'),
+                new FixedSupportedResolutionProvider(
+                    new Resolution(800, 600),
+                    new Resolution(1280, 720)));
+            var options = new PatchOptions
+            {
+                InputPath = inputPath,
+                OutputPath = outputPath,
+                OldResolution = new Resolution(640, 480),
+                NoBackup = true,
+            };
+
+            var exitCode = application.Run(options);
+            var metadata = new PatchMetadataCodec().Read(File.ReadAllBytes(outputPath), out _);
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains(new Resolution(1280, 720), metadata!.Resolutions);
+            Assert.Equal(metadata.Resolutions.Count, metadata.Resolutions.Distinct().Count());
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Run_InteractiveUncheckedInput_WhenResolutionIsAlreadyUsed_RepromptsImmediately()
+    {
+        var temporaryDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
+            var outputPath = Path.Combine(temporaryDirectory, "patched.exe");
+            File.WriteAllBytes(inputPath, TestPeFactory.Create());
+            var (application, output) = CreateInteractiveApplication(
+                new QueueConsoleInput(
+                    '8', '0', '0', '\r',
+                    '6', '0', '0', '\r',
+                    '1', '2', '8', '0', '\r',
+                    '7', '2', '0', '\r',
+                    'y', '\r',
+                    'n', '\r',
+                    '\r'),
+                new EmptySupportedResolutionProvider());
+            var options = new PatchOptions
+            {
+                InputPath = inputPath,
+                OutputPath = outputPath,
+                OldResolution = new Resolution(640, 480),
+                IsUnchecked = true,
+                NoBackup = true,
+            };
+
+            var exitCode = application.Run(options);
+            var metadata = new PatchMetadataCodec().Read(File.ReadAllBytes(outputPath), out _);
+
+            Assert.Equal(0, exitCode);
+            Assert.Contains("already used by another game resolution", output.ToString(), StringComparison.Ordinal);
+            Assert.Contains(new Resolution(1280, 720), metadata!.Resolutions);
+            Assert.Equal(metadata.Resolutions.Count, metadata.Resolutions.Distinct().Count());
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
     private static class TestPeFactory
     {
         public const int OriginalFunctionLength = 42;
@@ -469,6 +554,38 @@ public sealed class FieldOfViewPatcherTests
         }
     }
 
+    private (PatchApplication Application, StringWriter Output) CreateInteractiveApplication(
+        IAnsiConsoleInput input,
+        ISupportedResolutionProvider supportedResolutionProvider)
+    {
+        var output = new StringWriter();
+        var innerConsole = AnsiConsole.Create(
+            new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.Yes,
+                ColorSystem = ColorSystemSupport.Standard,
+                Out = new AnsiConsoleOutput(output),
+                Interactive = InteractionSupport.Yes,
+            });
+        var console = new TestConsole(innerConsole, input);
+        var metadataCodec = new PatchMetadataCodec();
+        var calculator = new FieldOfViewCalculator();
+
+        return (
+            new PatchApplication(
+                console,
+                new UnusedFileDialogService(),
+                supportedResolutionProvider,
+                metadataCodec,
+                new ResolutionPatternScanner(),
+                new ResolutionPatcher(metadataCodec),
+                new PatchedFileWriter(),
+                new StatusPresenter(console, calculator),
+                calculator,
+                patcher),
+            output);
+    }
+
     private sealed class UnusedFileDialogService : IFileDialogService
     {
         public string? SelectInputFile() => throw new InvalidOperationException();
@@ -479,6 +596,12 @@ public sealed class FieldOfViewPatcherTests
     private sealed class EmptySupportedResolutionProvider : ISupportedResolutionProvider
     {
         public IReadOnlyList<Resolution> GetSupportedResolutions() => [];
+    }
+
+    private sealed class FixedSupportedResolutionProvider(params Resolution[] resolutions)
+        : ISupportedResolutionProvider
+    {
+        public IReadOnlyList<Resolution> GetSupportedResolutions() => resolutions;
     }
 
     private sealed class TestConsole(IAnsiConsole inner, IAnsiConsoleInput input) : IAnsiConsole
@@ -523,6 +646,7 @@ public sealed class FieldOfViewPatcherTests
             var key = character switch
             {
                 '\r' => ConsoleKey.Enter,
+                >= '0' and <= '9' => (ConsoleKey)((int)ConsoleKey.D0 + (character - '0')),
                 _ => Enum.Parse<ConsoleKey>(character.ToString(), ignoreCase: true),
             };
             return new ConsoleKeyInfo(character, key, shift: false, alt: false, control: false);
