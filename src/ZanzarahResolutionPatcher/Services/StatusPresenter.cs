@@ -48,6 +48,14 @@ public sealed class StatusPresenter(
         AddRow(table, "Backup", backupStatus);
         AddRow(table, "Validation", options.IsUnchecked ? "Unchecked" : "Windows display modes");
         AddRow(table, "Interaction", options.NonInteractive ? "Disabled" : "Enabled");
+        AddRow(
+            table,
+            "FOV fix",
+            options.ApplyFieldOfViewFix
+                ? "Required"
+                : options.NonInteractive
+                    ? "Not requested"
+                    : "Ask for non-4:3 resolutions");
 
         console.Write(table);
         console.WriteLine();

@@ -18,6 +18,8 @@ public sealed class PatchOptions
 
     public bool NonInteractive { get; init; }
 
+    public bool ApplyFieldOfViewFix { get; init; }
+
     public bool InputWasSelectedInteractively { get; set; }
 
     public IReadOnlyList<ResolutionReplacement> Replacements => replacements;

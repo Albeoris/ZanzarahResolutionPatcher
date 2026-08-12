@@ -48,4 +48,8 @@ public sealed class PatchCommandSettings : CommandSettings
     [CommandOption("--non-interactive")]
     [Description("Disable dialogs, prompts, confirmation, and the error pause. Alias: -ni.")]
     public bool NonInteractive { get; init; }
+
+    [CommandOption("--fov-fix")]
+    [Description("Apply the automatic FOV fix without prompting; fail if it is unavailable.")]
+    public bool FovFix { get; init; }
 }

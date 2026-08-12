@@ -149,6 +149,7 @@ public sealed class FieldOfViewPatcherTests
                 NewResolution = new Resolution(1920, 1080),
                 IsUnchecked = true,
                 NoBackup = true,
+                ApplyFieldOfViewFix = true,
             };
 
             var exitCode = application.Run(options);
@@ -165,6 +166,19 @@ public sealed class FieldOfViewPatcherTests
             Assert.Equal(
                 FieldOfViewPatchStatus.AlreadyApplied,
                 patcher.Analyze(completeFile.AsSpan(0, executableLength)));
+
+            var secondExitCode = Program.Main(
+            [
+                "--input", outputPath,
+                "--old-resolution", "1920x1080",
+                "--new-resolution", "1600x900",
+                "--unchecked",
+                "--no-backup",
+                "--non-interactive",
+                "--fov-fix",
+            ]);
+
+            Assert.Equal(0, secondExitCode);
         }
         finally
         {
@@ -173,7 +187,7 @@ public sealed class FieldOfViewPatcherTests
     }
 
     [Fact]
-    public void Run_InteractiveWidescreenPatch_WhenAccepted_AppliesAutomaticFovFix()
+    public void Run_InteractiveWidescreenPatch_WhenFovFixIsRequired_AppliesWithoutFovConfirmation()
     {
         var temporaryDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -203,7 +217,7 @@ public sealed class FieldOfViewPatcherTests
                 });
             var console = new TestConsole(
                 innerConsole,
-                new QueueConsoleInput('y', '\r', 'y', '\r', '\r'));
+                new QueueConsoleInput('y', '\r', '\r'));
             var metadataCodec = new PatchMetadataCodec();
             var calculator = new FieldOfViewCalculator();
             var application = new PatchApplication(
@@ -225,6 +239,7 @@ public sealed class FieldOfViewPatcherTests
                 NewResolution = new Resolution(1920, 1080),
                 IsUnchecked = true,
                 NoBackup = true,
+                ApplyFieldOfViewFix = true,
             };
 
             var exitCode = application.Run(options);
@@ -233,8 +248,7 @@ public sealed class FieldOfViewPatcherTests
             var renderedOutput = output.ToString();
 
             Assert.Equal(0, exitCode);
-            Assert.Contains("default FOV 1000,750", renderedOutput, StringComparison.Ordinal);
-            Assert.Contains("after every game launch", renderedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("Apply the automatic FOV fix?", renderedOutput, StringComparison.Ordinal);
             Assert.Contains("automatic calculation was enabled", renderedOutput, StringComparison.Ordinal);
             Assert.DoesNotContain("FOV REQUIRED", renderedOutput, StringComparison.Ordinal);
             Assert.Contains("Alt+Tab", renderedOutput, StringComparison.Ordinal);
@@ -242,6 +256,84 @@ public sealed class FieldOfViewPatcherTests
             Assert.Equal(
                 FieldOfViewPatchStatus.AlreadyApplied,
                 patcher.Analyze(completeFile.AsSpan(0, executableLength)));
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Main_NonInteractiveFovFix_AppliesFixWithoutPrompting()
+    {
+        var temporaryDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
+            var outputPath = Path.Combine(temporaryDirectory, "patched.exe");
+            File.WriteAllBytes(inputPath, TestPeFactory.Create());
+
+            var exitCode = Program.Main(
+            [
+                "--input", inputPath,
+                "--output", outputPath,
+                "--old-resolution", "800x600",
+                "--new-resolution", "1920x1080",
+                "--unchecked",
+                "--no-backup",
+                "--non-interactive",
+                "--fov-fix",
+            ]);
+
+            var completeFile = File.ReadAllBytes(outputPath);
+            _ = new PatchMetadataCodec().Read(completeFile, out var executableLength);
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal(
+                FieldOfViewPatchStatus.AlreadyApplied,
+                patcher.Analyze(completeFile.AsSpan(0, executableLength)));
+        }
+        finally
+        {
+            Directory.Delete(temporaryDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Main_RequiredFovFixIsUnavailable_ReturnsErrorWithoutWritingOutput()
+    {
+        var temporaryDirectory = Path.Combine(
+            Path.GetTempPath(),
+            $"ZanzarahResolutionPatcher.Tests.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(temporaryDirectory);
+
+        try
+        {
+            var inputPath = Path.Combine(temporaryDirectory, "zanthp.exe");
+            var outputPath = Path.Combine(temporaryDirectory, "patched.exe");
+            var executable = TestPeFactory.Create();
+            executable[FieldOfViewPatcher.OriginalFunctionOffset] = 0x90;
+            File.WriteAllBytes(inputPath, executable);
+
+            var exitCode = Program.Main(
+            [
+                "--input", inputPath,
+                "--output", outputPath,
+                "--old-resolution", "800x600",
+                "--new-resolution", "1920x1080",
+                "--unchecked",
+                "--no-backup",
+                "--non-interactive",
+                "--fov-fix",
+            ]);
+
+            Assert.Equal(1, exitCode);
+            Assert.False(File.Exists(outputPath));
+            Assert.Equal(executable, File.ReadAllBytes(inputPath));
         }
         finally
         {

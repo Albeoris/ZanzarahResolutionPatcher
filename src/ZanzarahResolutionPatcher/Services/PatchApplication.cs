@@ -529,6 +529,24 @@ public sealed class PatchApplication(
         FieldOfViewPatchStatus patchStatus,
         ref byte[] patchedExecutable)
     {
+        if (patchStatus == FieldOfViewPatchStatus.AlreadyApplied)
+        {
+            return false;
+        }
+
+        if (options.ApplyFieldOfViewFix)
+        {
+            if (patchStatus != FieldOfViewPatchStatus.Available)
+            {
+                throw new UserInputException(
+                    "The automatic FOV fix was requested, but the supported SetFOV function " +
+                    $"was not found at physical file offset 0x{FieldOfViewPatcher.OriginalFunctionOffset:X5}.");
+            }
+
+            patchedExecutable = ApplyFieldOfViewPatch(patchedExecutable);
+            return true;
+        }
+
         if (options.NonInteractive ||
             patchStatus != FieldOfViewPatchStatus.Available ||
             finalResolutions.All(IsFourByThree))
@@ -550,12 +568,17 @@ public sealed class PatchApplication(
             return false;
         }
 
+        patchedExecutable = ApplyFieldOfViewPatch(patchedExecutable);
+        return true;
+    }
+
+    private byte[] ApplyFieldOfViewPatch(ReadOnlySpan<byte> executableBytes)
+    {
         try
         {
-            patchedExecutable = fieldOfViewPatcher.Apply(patchedExecutable);
-            return true;
+            return fieldOfViewPatcher.Apply(executableBytes);
         }
-        catch (InvalidDataException exception)
+        catch (Exception exception) when (exception is InvalidDataException or InvalidOperationException)
         {
             throw new UserInputException($"The automatic FOV fix could not be applied: {exception.Message}");
         }

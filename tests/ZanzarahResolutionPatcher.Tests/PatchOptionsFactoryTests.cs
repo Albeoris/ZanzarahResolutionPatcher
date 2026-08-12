@@ -18,6 +18,7 @@ public sealed class PatchOptionsFactoryTests
             IsUnchecked = true,
             NoBackup = true,
             NonInteractive = true,
+            FovFix = true,
         };
 
         var result = factory.Create(settings);
@@ -27,6 +28,7 @@ public sealed class PatchOptionsFactoryTests
         Assert.True(result.IsUnchecked);
         Assert.True(result.NoBackup);
         Assert.True(result.NonInteractive);
+        Assert.True(result.ApplyFieldOfViewFix);
     }
 
     [Fact]

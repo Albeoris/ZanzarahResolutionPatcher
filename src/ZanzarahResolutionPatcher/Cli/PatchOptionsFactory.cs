@@ -33,6 +33,7 @@ public sealed class PatchOptionsFactory
             IsUnchecked = settings.IsUnchecked,
             NoBackup = settings.NoBackup,
             NonInteractive = settings.NonInteractive,
+            ApplyFieldOfViewFix = settings.FovFix,
         };
     }
 
