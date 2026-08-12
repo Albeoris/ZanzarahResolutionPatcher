@@ -117,10 +117,13 @@ This reproduces the established recommendations:
 - 16:10: `fov 1200,750`
 - 16:9: `fov 1350,750`
 
-The general angular conversion was also verified: a 4:3 horizontal FOV of 45 degrees becomes approximately 57.822402 degrees at 16:9 and 52.859924 degrees at 16:10. Converting from 16:9 to 16:10 produces the same result as converting directly from 4:3. Zanzarah's `fov x,y` command uses the pair above rather than IEEE-754 degree bytes, so no FOV hex edit is required.
+The general angular conversion was also verified: a 4:3 horizontal FOV of 45 degrees becomes approximately 57.822402 degrees at 16:9 and 52.859924 degrees at 16:10. Converting from 16:9 to 16:10 produces the same result as converting directly from 4:3.
 
-After patching any non-4:3 target, the application prints the required commands in red. Apply them after every game launch; otherwise the rendered world is horizontally distorted.
-Interactive runs wait for ENTER after this warning so it cannot disappear when the console window closes.
+For the supported x86 executable, an interactive widescreen patch offers an automatic FOV fix after the resolution patch has succeeded in memory. The fix is offered only when the original `SetFOV` function is present at physical file offset `0x0755F`. It adds a read/execute code section and makes the game calculate the horizontal FOV from the active width and height whenever it receives the default 4:3 FOV `1000,750`.
+
+PE image section names are limited to eight bytes, so the logical `.albeoris_fovfix` section is stored under the on-disk marker `.albeori`. If that marker already exists, the fix is not offered or applied again. Patch metadata is appended only after this PE transformation.
+
+If the automatic fix is declined, unavailable, or skipped by `--non-interactive`, the application prints the required console commands in red. Apply the matching command after every game launch; otherwise the rendered world is horizontally distorted. The FOV warning is omitted when the automatic fix was already present or was applied successfully. This does not suppress unrelated warnings: Steam installations still show the task-switching warning, and interactive runs wait for ENTER after any warning so it cannot disappear when the console window closes.
 
 For the Steam version:
 

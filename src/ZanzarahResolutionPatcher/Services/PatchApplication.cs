@@ -13,8 +13,11 @@ public sealed class PatchApplication(
     ResolutionPatcher patcher,
     PatchedFileWriter fileWriter,
     StatusPresenter statusPresenter,
-    FieldOfViewCalculator fieldOfViewCalculator)
+    FieldOfViewCalculator fieldOfViewCalculator,
+    FieldOfViewPatcher? fieldOfViewPatcher = null)
 {
+    private readonly FieldOfViewPatcher fieldOfViewPatcher = fieldOfViewPatcher ?? new FieldOfViewPatcher();
+
     private static readonly Resolution[] OriginalGameResolutions =
     [
         new(640, 480),
@@ -37,7 +40,8 @@ public sealed class PatchApplication(
             new ResolutionPatcher(metadataCodec),
             new PatchedFileWriter(),
             new StatusPresenter(console, fieldOfViewCalculator),
-            fieldOfViewCalculator);
+            fieldOfViewCalculator,
+            new FieldOfViewPatcher());
     }
 
     public int Run(PatchOptions options)
@@ -54,6 +58,7 @@ public sealed class PatchApplication(
 
         var sourceBytes = ReadInputFile(options.InputPath!);
         var metadata = ReadMetadata(sourceBytes, out var executableLength);
+        var fieldOfViewPatchStatus = AnalyzeFieldOfViewPatch(sourceBytes.AsSpan(0, executableLength));
         var gameResolutions = metadata?.Resolutions ?? OriginalGameResolutions;
         var offsets = patternScanner.FindAll(
             sourceBytes.AsSpan(0, executableLength),
@@ -89,6 +94,7 @@ public sealed class PatchApplication(
         }
 
         EnsureFinalResolutionsAreUnique(options, gameResolutions);
+        var finalResolutions = options.ResolveFinalResolutions(gameResolutions);
 
         var plan = new PatchPlan(
             options,
@@ -108,7 +114,13 @@ public sealed class PatchApplication(
             return 0;
         }
 
-        var patchedBytes = patcher.Patch(plan);
+        var patchedExecutable = patcher.PatchExecutable(plan);
+        var fieldOfViewPatchApplied = TryApplyFieldOfViewPatch(
+            options,
+            finalResolutions,
+            fieldOfViewPatchStatus,
+            ref patchedExecutable);
+        var patchedBytes = metadataCodec.Append(patchedExecutable, finalResolutions);
         fileWriter.Write(
             options.OutputPath!,
             patchedBytes,
@@ -117,15 +129,18 @@ public sealed class PatchApplication(
             options.InputPath!);
 
         WriteSuccess(options, offsets);
+        WriteFieldOfViewPatchStatus(fieldOfViewPatchStatus, fieldOfViewPatchApplied);
         console.MarkupLine($"Output: [white]{Markup.Escape(options.OutputPath!)}[/]");
         if (willCreateBackup)
         {
             console.MarkupLine($"Backup: [white]{Markup.Escape(backupPath!)}[/]");
         }
 
-        var fieldOfViewWarningWasShown = WriteFieldOfViewWarning(options);
-        WriteSteamWarning(options);
-        WaitAfterFieldOfViewWarning(options, fieldOfViewWarningWasShown);
+        var fieldOfViewIsPatched =
+            fieldOfViewPatchStatus == FieldOfViewPatchStatus.AlreadyApplied || fieldOfViewPatchApplied;
+        var fieldOfViewWarningWasShown = WriteFieldOfViewWarning(finalResolutions, fieldOfViewIsPatched);
+        var steamWarningWasShown = WriteSteamWarning(options);
+        WaitAfterWarnings(options, fieldOfViewWarningWasShown || steamWarningWasShown);
 
         return 0;
     }
@@ -268,6 +283,18 @@ public sealed class PatchApplication(
         }
 
         return patchable;
+    }
+
+    private FieldOfViewPatchStatus AnalyzeFieldOfViewPatch(ReadOnlySpan<byte> executableBytes)
+    {
+        try
+        {
+            return fieldOfViewPatcher.Analyze(executableBytes);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new UserInputException($"The executable could not be analyzed for the FOV fix: {exception.Message}");
+        }
     }
 
     private static void EnsureFinalResolutionsAreUnique(
@@ -496,6 +523,58 @@ public sealed class PatchApplication(
         return choices;
     }
 
+    private bool TryApplyFieldOfViewPatch(
+        PatchOptions options,
+        IReadOnlyList<Resolution> finalResolutions,
+        FieldOfViewPatchStatus patchStatus,
+        ref byte[] patchedExecutable)
+    {
+        if (options.NonInteractive ||
+            patchStatus != FieldOfViewPatchStatus.Available ||
+            finalResolutions.All(IsFourByThree))
+        {
+            return false;
+        }
+
+        console.WriteLine();
+        console.MarkupLine("[deepskyblue1]Automatic FOV fix available[/]");
+        console.WriteLine(
+            "Zanzarah is designed for a 4:3 aspect ratio and uses the default FOV 1000,750. " +
+            "Keeping that FOV at a non-4:3 resolution distorts the image.");
+        console.WriteLine(
+            "The automatic fix makes the game calculate the horizontal FOV from the active screen size. " +
+            "If you decline, you must set the correct FOV through the console after every game launch.");
+
+        if (!console.Confirm("Apply the automatic FOV fix?", defaultValue: true))
+        {
+            return false;
+        }
+
+        try
+        {
+            patchedExecutable = fieldOfViewPatcher.Apply(patchedExecutable);
+            return true;
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new UserInputException($"The automatic FOV fix could not be applied: {exception.Message}");
+        }
+    }
+
+    private void WriteFieldOfViewPatchStatus(
+        FieldOfViewPatchStatus patchStatus,
+        bool patchWasApplied)
+    {
+        if (patchWasApplied)
+        {
+            console.MarkupLine("[green]FOV fix:[/] automatic calculation was enabled.");
+        }
+        else if (patchStatus == FieldOfViewPatchStatus.AlreadyApplied)
+        {
+            console.MarkupLine("[green]FOV fix:[/] automatic calculation was already enabled.");
+        }
+    }
+
     private void WriteSuccess(
         PatchOptions options,
         IReadOnlyDictionary<Resolution, IReadOnlyList<int>> offsets)
@@ -515,10 +594,18 @@ public sealed class PatchApplication(
         }
     }
 
-    private bool WriteFieldOfViewWarning(PatchOptions options)
+    private bool WriteFieldOfViewWarning(
+        IReadOnlyList<Resolution> finalResolutions,
+        bool fieldOfViewIsPatched)
     {
-        var widescreenTargets = options.Replacements
-            .Select(static replacement => replacement.NewResolution)
+        ArgumentNullException.ThrowIfNull(finalResolutions);
+
+        if (fieldOfViewIsPatched)
+        {
+            return false;
+        }
+
+        var widescreenTargets = finalResolutions
             .Where(static resolution => !IsFourByThree(resolution))
             .Distinct()
             .Order()
@@ -549,11 +636,11 @@ public sealed class PatchApplication(
         return true;
     }
 
-    private void WaitAfterFieldOfViewWarning(
+    private void WaitAfterWarnings(
         PatchOptions options,
-        bool fieldOfViewWarningWasShown)
+        bool warningWasShown)
     {
-        if (options.NonInteractive || !fieldOfViewWarningWasShown)
+        if (options.NonInteractive || !warningWasShown)
         {
             return;
         }
@@ -569,11 +656,11 @@ public sealed class PatchApplication(
     private static bool IsFourByThree(Resolution resolution) =>
         (long)resolution.Width * 3 == (long)resolution.Height * 4;
 
-    private void WriteSteamWarning(PatchOptions options)
+    private bool WriteSteamWarning(PatchOptions options)
     {
         if (!GamePathDetector.IsSteamInstallation(options.InputPath!))
         {
-            return;
+            return false;
         }
 
         const string issueUrl =
@@ -589,6 +676,7 @@ public sealed class PatchApplication(
             "Avoid Alt+Tab while playing. If you are reading this in the future and the issue is fixed, " +
             "ignore this warning.");
         console.WriteLine($"Details: {issueUrl}");
+        return true;
     }
 
     private ushort PromptDimension(string prompt)

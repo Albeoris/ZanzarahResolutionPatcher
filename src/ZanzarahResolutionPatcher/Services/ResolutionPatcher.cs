@@ -7,6 +7,14 @@ public sealed class ResolutionPatcher(PatchMetadataCodec metadataCodec)
 {
     public byte[] Patch(PatchPlan plan)
     {
+        var executable = PatchExecutable(plan);
+        var updatedResolutions = plan.Options.ResolveFinalResolutions(plan.GameResolutions);
+
+        return metadataCodec.Append(executable, updatedResolutions);
+    }
+
+    public byte[] PatchExecutable(PatchPlan plan)
+    {
         ArgumentNullException.ThrowIfNull(plan);
 
         if (plan.Options.Replacements.Count == 0)
@@ -33,8 +41,6 @@ public sealed class ResolutionPatcher(PatchMetadataCodec metadataCodec)
             }
         }
 
-        var updatedResolutions = plan.Options.ResolveFinalResolutions(plan.GameResolutions);
-
-        return metadataCodec.Append(executable, updatedResolutions);
+        return executable;
     }
 }
